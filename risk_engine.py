@@ -2,17 +2,22 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from data_catalog import ASSETS, CONTROLS, SECTOR_PROFILES, THREATS, QUALITY_LEVELS
+from data_catalog import CONTROLS, SECTOR_PROFILES, THREATS, QUALITY_LEVELS
 
-LAYER_LABELS = {"technical": "Технический слой", "org_legal": "Организационно-правовой слой", "economic_management": "Экономико-управленческий слой"}
+LAYER_LABELS = {
+    "technical": "Технический слой",
+    "org_legal": "Организационно-правовой слой",
+    "economic_management": "Экономико-управленческий слой",
+    "socio_legal": "Социо-правовой слой штрафов и жалоб",
+}
 
 def clamp(v, low=0.0, high=1.0): return max(low, min(high, v))
 
 def calculate_base_loss(monthly_revenue, critical_loss_threshold, downtime_hours, pdn_subjects, loss_share, heavy_tail, dep):
     daily = monthly_revenue / 30
     downtime = daily * max(downtime_hours, 1) / 8
-    legal_scale = min(max(pdn_subjects / 1000, 0), 25) * 10000
-    return max(10000, monthly_revenue * loss_share * dep + downtime + legal_scale + critical_loss_threshold * 0.05 * heavy_tail)
+    legal_social_scale = min(max(pdn_subjects / 1000, 0), 25) * 10000
+    return max(10000, monthly_revenue * loss_share * dep + downtime + legal_social_scale + critical_loss_threshold * 0.05 * heavy_tail)
 
 def threat_vulnerability(threat_id, staff_with_access, has_remote_work, has_contractors, has_pdn, online_share):
     v = .65
@@ -20,8 +25,8 @@ def threat_vulnerability(threat_id, staff_with_access, has_remote_work, has_cont
     if staff_with_access >= 15: v += .10
     if has_remote_work: v += .06
     if has_contractors: v += .07
-    if has_pdn and threat_id in {"pdn_leak", "legal_gap_pdn", "insider_leak"}: v += .12
-    if online_share >= 50 and threat_id in {"website_outage", "account_takeover", "phishing_email"}: v += .10
+    if has_pdn and threat_id in {"pdn_leak", "legal_gap_pdn", "insider_leak", "complaints_publicity"}: v += .12
+    if online_share >= 50 and threat_id in {"website_outage", "account_takeover", "phishing_email", "complaints_publicity"}: v += .10
     return clamp(v, .25, 1.35)
 
 def sector_asset_dependency(sector, asset_ids):
@@ -56,7 +61,21 @@ def calculate_risk_table(sector, selected_asset_ids, monthly_revenue, critical_l
             controls.append(c.name)
             costs += int(c.annual_cost * q)
         res = base * mult
-        rows.append({"id": t.id, "Угроза / правовой разрыв": t.name, "Слой": LAYER_LABELS[t.layer], "Вероятность": likelihood, "Уязвимость": vul, "Оценка ущерба, руб.": loss, "Исходный риск, руб.": base, "Остаточный риск, руб.": res, "Снижение риска, руб.": base-res, "Остаточный риск, %": res/base*100 if base else 0, "Применённые меры": "; ".join(controls) if controls else "нет", "Учтённые защитные затраты, руб.": costs, "Тяжёлый хвост": t.heavy_tail})
+        rows.append({
+            "id": t.id,
+            "Угроза / правовой разрыв": t.name,
+            "Слой": LAYER_LABELS[t.layer],
+            "Вероятность": likelihood,
+            "Уязвимость": vul,
+            "Оценка ущерба, руб.": loss,
+            "Исходный риск, руб.": base,
+            "Остаточный риск, руб.": res,
+            "Снижение риска, руб.": base-res,
+            "Остаточный риск, %": res/base*100 if base else 0,
+            "Применённые меры": "; ".join(controls) if controls else "нет",
+            "Учтённые защитные затраты, руб.": costs,
+            "Тяжёлый хвост": t.heavy_tail
+        })
     return pd.DataFrame(rows)
 
 def calculate_summary(df, critical_loss_threshold):

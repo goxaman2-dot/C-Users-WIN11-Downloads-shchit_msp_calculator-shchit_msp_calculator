@@ -25,25 +25,28 @@ def _q(selected_quality: dict[str, str], control_id: str) -> float:
     levels = {"none": 0.0, "paid": 0.15, "formal": 0.35, "working": 0.65, "embedded": 0.90}
     return levels.get(selected_quality.get(control_id, "none"), 0.0)
 
-def legal_gap_score(*, has_pdn: bool, selected_quality: dict[str, str], has_contractors: bool, staff_with_access: int) -> float:
+def socio_legal_gap_score(*, has_pdn: bool, selected_quality: dict[str, str], has_contractors: bool, staff_with_access: int, online_share: float) -> float:
     if not has_pdn:
         return 0.0
     gap = 1.0
-    gap -= 0.42 * _q(selected_quality, "pdn_compliance")
+    gap -= 0.35 * _q(selected_quality, "pdn_compliance")
     gap -= 0.18 * _q(selected_quality, "incident_procedure")
-    gap -= 0.16 * _q(selected_quality, "access_control")
-    gap -= 0.10 * _q(selected_quality, "offboarding")
-    gap -= 0.08 * _q(selected_quality, "employee_training")
+    gap -= 0.13 * _q(selected_quality, "access_control")
+    gap -= 0.08 * _q(selected_quality, "offboarding")
+    gap -= 0.07 * _q(selected_quality, "employee_training")
+    gap -= 0.14 * _q(selected_quality, "complaint_response")
     if has_contractors:
         gap += 0.08
     if staff_with_access >= 10:
         gap += 0.06
     if staff_with_access >= 30:
         gap += 0.06
+    if online_share >= 50:
+        gap += 0.05
     return max(0.05, min(1.0, gap))
 
-def detection_probability(*, online_share: float, pdn_subjects: int, legal_gap: float) -> float:
-    p = 0.08 + 0.22 * legal_gap
+def detection_probability(*, online_share: float, pdn_subjects: int, socio_legal_gap: float) -> float:
+    p = 0.08 + 0.22 * socio_legal_gap
     if online_share >= 50:
         p += 0.05
     if pdn_subjects >= 1000:
@@ -52,8 +55,8 @@ def detection_probability(*, online_share: float, pdn_subjects: int, legal_gap: 
         p += 0.08
     return max(0.02, min(0.65, p))
 
-def incident_probability_proxy(*, base_incident_probability: float, legal_gap: float) -> float:
-    return max(0.01, min(0.55, base_incident_probability * (0.65 + legal_gap)))
+def incident_probability_proxy(*, base_incident_probability: float, socio_legal_gap: float) -> float:
+    return max(0.01, min(0.55, base_incident_probability * (0.65 + socio_legal_gap)))
 
 def applicability(scenario_id: str, pdn_subjects: int, has_pdn: bool) -> float:
     if not has_pdn:
@@ -73,9 +76,10 @@ def turnover_fine_range(monthly_revenue: float) -> tuple[int, int]:
     return low, high
 
 def calculate_legal_fines(*, has_pdn: bool, monthly_revenue: float, pdn_subjects: int, selected_quality: dict[str, str], has_contractors: bool, staff_with_access: int, online_share: float, base_incident_probability: float):
-    gap = legal_gap_score(has_pdn=has_pdn, selected_quality=selected_quality, has_contractors=has_contractors, staff_with_access=staff_with_access)
-    p_detect = detection_probability(online_share=online_share, pdn_subjects=pdn_subjects, legal_gap=gap)
-    p_incident = incident_probability_proxy(base_incident_probability=base_incident_probability, legal_gap=gap)
+    gap = socio_legal_gap_score(has_pdn=has_pdn, selected_quality=selected_quality, has_contractors=has_contractors, staff_with_access=staff_with_access, online_share=online_share)
+    p_detect = detection_probability(online_share=online_share, pdn_subjects=pdn_subjects, socio_legal_gap=gap)
+    p_incident = incident_probability_proxy(base_incident_probability=base_incident_probability, socio_legal_gap=gap)
+
     rows = []
     for s in FINE_SCENARIOS:
         a = applicability(s.id, pdn_subjects, has_pdn)
@@ -99,8 +103,9 @@ def calculate_legal_fines(*, has_pdn: bool, monthly_revenue: float, pdn_subjects
             "Ожидаемый штраф максимум, руб.": p * max_f,
             "Ожидаемый штраф средний, руб.": p * ((min_f + max_f) / 2),
         })
+
     return rows, {
-        "legal_gap_score": gap * 100,
+        "socio_legal_gap_score": gap * 100,
         "detection_probability": p_detect * 100,
         "incident_probability_proxy": p_incident * 100,
         "expected_legal_fines_mid": sum(r["Ожидаемый штраф средний, руб."] for r in rows),
