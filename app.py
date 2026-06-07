@@ -28,7 +28,7 @@ with st.sidebar:
     tolerated_downtime_hours = st.slider("Допустимый простой, часов", 1, 120, 8)
     critical_loss_threshold = st.number_input("Критический ущерб для устойчивости МСП, руб.", 50_000, 500_000_000, 1_500_000, 50_000)
     st.header("2. Люди и данные")
-    staff_with_access = st.slider("Сотрудников с доступом к данным / кабинетам", 1, 250, 8)
+    staff_with_access = st.slider("Лица с доступом к данным / кабинетам, включая штат, аутсорсинг и самозанятых", 1, 25, 8)
     has_remote_work = st.checkbox("Есть удалённый доступ", value=True)
     has_contractors = st.checkbox("Есть подрядчики с доступом к данным или сервисам", value=True)
     has_pdn = st.checkbox("Обрабатываются персональные данные", value=True)
