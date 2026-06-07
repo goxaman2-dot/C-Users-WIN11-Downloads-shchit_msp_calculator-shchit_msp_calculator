@@ -7,7 +7,7 @@ from data_catalog import ASSETS, CONTROLS, QUALITY_LEVELS, SECTOR_PROFILES
 from legal_fines import calculate_legal_fines
 from risk_engine import calculate_risk_table, calculate_summary, greedy_cost_plan, layer_summary, marginal_control_effect, protection_costs
 
-APP_TITLE = "Риски ИБ - МСП 2026"
+APP_TITLE = "Калькулятор рисков ИБ для МСП — 2026"
 APP_VERSION = "v.3.0"
 
 st.set_page_config(page_title=f"{APP_TITLE} {APP_VERSION}", page_icon="⚖️", layout="wide")
